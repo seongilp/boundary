@@ -1,0 +1,11 @@
+# 이 파일을 terraform.tfvars 로 복사해서 값을 채운다.
+# (terraform.tfvars 는 .gitignore 로 git 에서 제외됨 — 시크릿 보호)
+# 로컬 dev 실습이라면 기본값으로 충분해서 비워둬도 동작한다.
+
+# boundary_addr     = "http://127.0.0.1:9200"
+# admin_password    = "password"
+# demo_password     = "demo1234"
+# vault_addr        = "http://127.0.0.1:8200"
+# vault_token       = "root"
+# pg_admin_password = "apppass"
+# ssh_login_password = "devpass"

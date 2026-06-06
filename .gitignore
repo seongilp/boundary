@@ -1,0 +1,20 @@
+# Boundary dev 런타임
+boundary-dev.log
+.boundary.pid
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/terraform.tfvars
+
+# 런타임 산출물 (stale)
+web/live.json
+
+# OS
+.DS_Store
+
+# gstack browse 런타임
+.gstack/
+**/.gstack/

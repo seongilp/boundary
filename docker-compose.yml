@@ -1,0 +1,44 @@
+# SSH 타겟 컨테이너 하나만 띄운다.
+# Boundary 워커는 호스트(macOS)에서 `boundary dev`로 네이티브 실행되므로,
+# 컨테이너의 22번 포트를 호스트 localhost:2222 로 노출시켜 워커가 직접 붙게 한다.
+services:
+  ssh-target:
+    image: lscr.io/linuxserver/openssh-server:latest
+    container_name: boundary-ssh-target
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Seoul
+      - USER_NAME=devuser          # SSH 로그인 계정
+      - USER_PASSWORD=devpass       # 비밀번호 인증 허용
+      - PASSWORD_ACCESS=true        # 패스워드 로그인 활성화 (실습용)
+      - SUDO_ACCESS=false
+    ports:
+      - "2222:2222"                 # 호스트 2222 -> 컨테이너 2222
+    restart: unless-stopped
+
+  # PostgreSQL 타겟. 호스트 localhost:5432 로 노출.
+  postgres-target:
+    image: postgres:16
+    container_name: boundary-pg-target
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: apppass
+      POSTGRES_DB: appdb
+    ports:
+      - "5432:5432"                 # 호스트 5432 -> 컨테이너 5432
+    restart: unless-stopped
+
+  # HashiCorp Vault (dev 모드). 동적 DB 자격증명 발급용.
+  # dev 모드라 자동 unseal, root 토큰 = "root". 학습 전용.
+  vault:
+    image: hashicorp/vault:latest
+    container_name: boundary-vault
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"                 # 호스트 8200 -> Vault API
+    restart: unless-stopped
