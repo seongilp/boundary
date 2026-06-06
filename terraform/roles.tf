@@ -1,56 +1,39 @@
 # ────────────────────────────────────────────────────────────────
-# Roles + Grants — 누가 어떤 target 에 authorize-session 가능한가.
-#   alice → ssh-target
-#   carol → pg-target, pg-dyn-target
-#   bob   → 없음
+# Roles + Grants — 데이터 기반(access.json) 으로 자동 생성.
+#   access.json: { "사용자": ["허용 target 이름", ...] }  ← 웹 신청 포털이 이 파일만 수정해 PR
+#   여기서 (사용자 × target) 마다 role 하나씩 생성.
 # ────────────────────────────────────────────────────────────────
 
-resource "boundary_role" "ssh_connect" {
-  name            = "ssh-connect"
-  scope_id        = var.project_scope_id
-  grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.ssh.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["alice"].id]
+locals {
+  # 단일 소스: 누가 어떤 target 에 접근 가능한가
+  access = jsondecode(file("${path.module}/access.json"))
+
+  # target 이름 → target id 매핑
+  target_ids = {
+    "ssh-target"    = boundary_target.ssh.id
+    "pg-target"     = boundary_target.pg.id
+    "pg-dyn-target" = boundary_target.pg_dynamic.id
+    "redis-target"  = boundary_target.redis.id
+    "web-target"    = boundary_target.web.id
+    "k8s-target"    = boundary_target.k8s.id
+  }
+
+  # (사용자,target) 쌍으로 평탄화
+  grants = flatten([
+    for user, targets in local.access : [
+      for t in targets : { user = user, target = t }
+    ]
+  ])
 }
 
-resource "boundary_role" "pg_connect" {
-  name            = "pg-connect"
-  scope_id        = var.project_scope_id
-  grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.pg.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["carol"].id]
-}
+resource "boundary_role" "access" {
+  for_each = { for g in local.grants : "${g.user}--${g.target}" => g }
 
-resource "boundary_role" "pg_dyn_connect" {
-  name            = "pg-dyn-connect"
+  name            = "${each.value.user}--${each.value.target}"
   scope_id        = var.project_scope_id
   grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.pg_dynamic.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["carol"].id]
-}
-
-resource "boundary_role" "redis_connect" {
-  name            = "redis-connect"
-  scope_id        = var.project_scope_id
-  grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.redis.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["carol"].id] # carol = 데이터스토어 담당
-}
-
-resource "boundary_role" "web_connect" {
-  name            = "web-connect"
-  scope_id        = var.project_scope_id
-  grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.web.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["alice"].id] # alice = 앱/웹 담당
-}
-
-resource "boundary_role" "k8s_connect" {
-  name            = "k8s-connect"
-  scope_id        = var.project_scope_id
-  grant_scope_ids = ["this"]
-  grant_strings   = ["ids=${boundary_target.k8s.id};actions=authorize-session,read"]
-  principal_ids   = [boundary_user.this["alice"].id] # alice = SRE/플랫폼 담당
+  grant_strings   = ["ids=${local.target_ids[each.value.target]};actions=authorize-session,read"]
+  principal_ids   = [boundary_user.this[each.value.user].id]
 }
 
 # boundary dev 가 자동 생성하는 'Authenticated User Grants' 역할은
@@ -64,9 +47,5 @@ resource "null_resource" "tighten_default_grants" {
     command     = "${path.module}/tighten-default-grants.sh '${var.boundary_addr}' '${var.auth_method_id}' '${var.admin_login}' '${var.admin_password}'"
   }
 
-  depends_on = [
-    boundary_role.ssh_connect,
-    boundary_role.pg_connect,
-    boundary_role.pg_dyn_connect,
-  ]
+  depends_on = [boundary_role.access]
 }
