@@ -18,3 +18,7 @@ web/live.json
 # gstack browse 런타임
 .gstack/
 **/.gstack/
+
+# crypto-api 시크릿/키
+crypto-api/.vault_token
+crypto-api/certs/
