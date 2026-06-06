@@ -116,6 +116,21 @@ variable "k8s_port" {
   default = 26443
 }
 
+# Keycloak (OIDC)
+variable "oidc_issuer" {
+  type    = string
+  default = "http://127.0.0.1:8081/realms/boundary"
+}
+variable "oidc_client_id" {
+  type    = string
+  default = "boundary"
+}
+variable "oidc_client_secret" {
+  type      = string
+  default   = "boundary-secret"
+  sensitive = true
+}
+
 # Vault
 variable "vault_addr" {
   type    = string

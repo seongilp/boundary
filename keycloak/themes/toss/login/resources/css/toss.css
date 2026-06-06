@@ -1,0 +1,105 @@
+/* Toss 풍 화이트 & 블루 Keycloak 로그인 테마 */
+:root{
+  --toss-blue:#3182f6;
+  --toss-blue-dark:#1b64da;
+  --toss-bg:#ffffff;
+  --toss-ink:#191f28;
+  --toss-sub:#8b95a1;
+  --toss-field:#f2f4f6;
+  --toss-line:#e5e8eb;
+}
+
+html, body, body.login-pf, .login-pf body{
+  background: var(--toss-bg) !important;
+  color: var(--toss-ink) !important;
+  font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Segoe UI',Roboto,sans-serif !important;
+}
+
+/* 배경 장식 제거 */
+.login-pf body{ background-image:none !important; }
+
+/* 헤더(브랜드) */
+#kc-header, #kc-header-wrapper{
+  color: var(--toss-ink) !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing:-.3px !important;
+  padding: 0 !important;
+  text-transform:none !important;
+  margin-bottom: 8px !important;
+}
+
+/* 카드 */
+.card-pf{
+  border:none !important;
+  border-radius: 24px !important;
+  box-shadow: 0 8px 40px rgba(25,31,40,.08) !important;
+  padding: 36px 32px !important;
+  margin-top: 8vh !important;
+  max-width: 400px !important;
+}
+#kc-content, #kc-content-wrapper{ width:100%; }
+
+/* 제목 */
+#kc-page-title{
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  color: var(--toss-ink) !important;
+  letter-spacing:-.3px !important;
+}
+
+/* 라벨 */
+.control-label, label{
+  color: var(--toss-sub) !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+}
+
+/* 인풋 */
+input[type=text], input[type=password], input[type=email], .form-control{
+  background: var(--toss-field) !important;
+  border: 1.5px solid transparent !important;
+  border-radius: 14px !important;
+  height: 52px !important;
+  font-size: 15px !important;
+  color: var(--toss-ink) !important;
+  padding: 0 16px !important;
+  box-shadow:none !important;
+  transition: border-color .15s, background .15s !important;
+}
+input:focus, .form-control:focus{
+  background:#fff !important;
+  border-color: var(--toss-blue) !important;
+  outline:none !important;
+}
+
+/* 기본 버튼 (로그인) */
+.btn-primary, #kc-login, input[type=submit].btn-primary{
+  background: var(--toss-blue) !important;
+  border: none !important;
+  border-radius: 14px !important;
+  height: 52px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  width: 100% !important;
+  box-shadow:none !important;
+  transition: background .15s !important;
+}
+.btn-primary:hover, #kc-login:hover{ background: var(--toss-blue-dark) !important; }
+
+/* 링크 */
+a, #kc-registration a, #kc-info-message a{
+  color: var(--toss-blue) !important;
+  font-weight: 600 !important;
+  text-decoration:none !important;
+}
+
+/* 체크박스 라벨 */
+#kc-form-options label{ color: var(--toss-sub) !important; }
+
+/* 에러/경고 알림 */
+.alert{ border-radius: 14px !important; border:none !important; }
+.alert-error{ background:#fff0f0 !important; color:#e03131 !important; }
+
+/* 푸터 여백 */
+#kc-form-buttons{ margin-top: 20px !important; }

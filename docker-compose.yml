@@ -45,6 +45,22 @@ services:
       - "8089:80"                   # 호스트 8089 -> 컨테이너 80
     restart: unless-stopped
 
+  # Keycloak — OIDC IdP (SSO). 회사 로그인 + 그룹(sre/dba) 제공.
+  # realm-boundary.json 을 부팅 시 import (선언형).
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: boundary-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"                 # 호스트 8081 -> Keycloak
+    volumes:
+      - ./keycloak/realm-boundary.json:/opt/keycloak/data/import/realm-boundary.json:ro
+      - ./keycloak/themes:/opt/keycloak/themes:ro
+    restart: unless-stopped
+
   # HashiCorp Vault (dev 모드). 동적 DB 자격증명 발급용.
   # dev 모드라 자동 unseal, root 토큰 = "root". 학습 전용.
   vault:

@@ -1,0 +1,60 @@
+{
+  "realm": "boundary",
+  "enabled": true,
+  "loginTheme": "toss",
+  "displayName": "Boundary SSO",
+  "groups": [
+    { "name": "sre" },
+    { "name": "dba" }
+  ],
+  "clients": [
+    {
+      "clientId": "boundary",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "boundary-secret",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://127.0.0.1:9200/v1/auth-methods/oidc:authenticate:callback",
+        "http://localhost:9200/v1/auth-methods/oidc:authenticate:callback"
+      ],
+      "webOrigins": ["*"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "claim.name": "groups",
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice", "enabled": true, "emailVerified": true,
+      "email": "alice@example.com", "firstName": "Alice", "lastName": "Kim",
+      "credentials": [{ "type": "password", "value": "demo1234", "temporary": false }],
+      "groups": ["/sre"]
+    },
+    {
+      "username": "carol", "enabled": true, "emailVerified": true,
+      "email": "carol@example.com", "firstName": "Carol", "lastName": "Lee",
+      "credentials": [{ "type": "password", "value": "demo1234", "temporary": false }],
+      "groups": ["/dba"]
+    },
+    {
+      "username": "bob", "enabled": true, "emailVerified": true,
+      "email": "bob@example.com", "firstName": "Bob", "lastName": "Park",
+      "credentials": [{ "type": "password", "value": "demo1234", "temporary": false }],
+      "groups": []
+    }
+  ]
+}
