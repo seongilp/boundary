@@ -1,10 +1,32 @@
-# Boundary 접근제어 실습 (GitOps)
+# Boundary 접근제어 + Zero-Trust 인프라 실습
 
-HashiCorp **Boundary** 로 SSH·PostgreSQL 접근제어를 로컬에서 실습하는 프로젝트.
-인프라는 **Docker**, 접근제어 리소스는 **Terraform** 으로 선언한다 (GitOps).
-DB 자격증명은 **Vault** 로 동적 발급한다.
+HashiCorp **Boundary** 접근제어에서 시작해, 인증(SSO)·신원·시크릿·서비스 보안까지
+로컬(Docker + kind)로 직접 띄워보며 학습한 zero-trust 인프라 모음.
 
-> 📖 자세한 사용법: [`docs/user-guide.md`](docs/user-guide.md) (HTML: `docs/user-guide.html`)
+> 📖 핵심 문서: [개요/PoC](docs/boundary-overview.md) · [운영 가이드](docs/operations-runbook.md) · [아키텍처](docs/architecture.md) · [사용자 가이드](docs/user-guide.md) (각 `.html` 버전 있음)
+
+## 전체 구성 (학습 여정)
+
+| 모듈 | 역할 | 위치 |
+|------|------|------|
+| **Boundary** | 사람 → 서버/DB 접근제어 (RBAC, 세션 프록시) | `terraform/`, `scripts/` |
+| **Vault** | 동적 DB 자격증명 (접속마다 임시계정) | `terraform/vault.tf` |
+| **Keycloak** | OIDC SSO 로그인 + MFA + 토스풍 테마 | `terraform/oidc.tf`, `keycloak/` |
+| **lldap** | LDAP 디렉터리 (사용자/그룹) → Keycloak federation | `keycloak/`, `scripts/seed-lldap.sh` |
+| **웹 포털** | 접근권한 셀프서비스 신청 + 운영자 페이지 (미니 IGA) | `request-portal/` |
+| **SPIRE** | 서비스 → 서비스 신원(SVID) + Vault연동 + mTLS | `spire/` |
+| **Temporal** | durable 워크플로우 (결제 사가, 자동 재시도/재개) | `temporal/` |
+| **Cilium+Hubble** | 서비스 네트워크 정책 + 트래픽 시각화 (eBPF) | `cilium/` |
+
+```
+사람   : lldap → Keycloak(SSO) → Boundary(RBAC) → 서버/DB/k8s
+서비스 : SPIRE(SVID) → mTLS / Vault인증 → 동적 자격증명
+네트워크: Cilium(정책) + Hubble(관측)
+공통   : 신원 기반 · 단기 자격증명 · 시크릿 제로
+```
+
+---
+## (핵심) Boundary 접근제어 — GitOps
 
 ## 구성
 
