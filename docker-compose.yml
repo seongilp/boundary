@@ -45,6 +45,21 @@ services:
       - "8089:80"                   # 호스트 8089 -> 컨테이너 80
     restart: unless-stopped
 
+  # lldap — 경량 LDAP 서버 (회사 디렉터리 흉내). 웹UI + GraphQL.
+  # Keycloak 이 이걸 User Federation 으로 읽어온다.
+  lldap:
+    image: lldap/lldap:stable
+    container_name: boundary-lldap
+    ports:
+      - "3890:3890"     # LDAP
+      - "17170:17170"   # 웹 UI + GraphQL API
+    environment:
+      LLDAP_JWT_SECRET: "demo-jwt-secret-please-change"
+      LLDAP_KEY_SEED: "demo-key-seed-please-change"
+      LLDAP_LDAP_BASE_DN: "dc=example,dc=com"
+      LLDAP_LDAP_USER_PASS: "adminpassword"
+    restart: unless-stopped
+
   # Keycloak — OIDC IdP (SSO). 회사 로그인 + 그룹(sre/dba) 제공.
   # realm-boundary.json 을 부팅 시 import (선언형).
   keycloak:
