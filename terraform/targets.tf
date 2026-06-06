@@ -51,3 +51,12 @@ resource "boundary_target" "web" {
   default_port = var.web_port
   address      = var.web_address
 }
+
+# Kubernetes API 서버 — 클러스터 전체의 제어판. 가장 통제가치 높은 타겟 중 하나.
+resource "boundary_target" "k8s" {
+  name         = "k8s-target"
+  type         = "tcp"
+  scope_id     = var.project_scope_id
+  default_port = var.k8s_port
+  address      = var.k8s_address
+}

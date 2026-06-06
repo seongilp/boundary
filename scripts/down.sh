@@ -16,4 +16,7 @@ pkill -f "boundary dev" 2>/dev/null || true
 echo "==> 컨테이너 내림"
 docker compose -f "$ROOT/docker-compose.yml" down
 
+echo "==> kind 클러스터 삭제 (boundary-demo)"
+kind delete cluster --name boundary-demo 2>/dev/null || true
+
 echo "✅ 정리 완료."

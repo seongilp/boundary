@@ -23,6 +23,11 @@ output "web_target_id" {
   value       = boundary_target.web.id
 }
 
+output "k8s_target_id" {
+  description = "Kubernetes API target ID"
+  value       = boundary_target.k8s.id
+}
+
 output "users" {
   description = "생성된 Boundary 사용자"
   value       = { for k, u in boundary_user.this : k => u.id }

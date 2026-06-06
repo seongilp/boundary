@@ -45,6 +45,14 @@ resource "boundary_role" "web_connect" {
   principal_ids   = [boundary_user.this["alice"].id] # alice = 앱/웹 담당
 }
 
+resource "boundary_role" "k8s_connect" {
+  name            = "k8s-connect"
+  scope_id        = var.project_scope_id
+  grant_scope_ids = ["this"]
+  grant_strings   = ["ids=${boundary_target.k8s.id};actions=authorize-session,read"]
+  principal_ids   = [boundary_user.this["alice"].id] # alice = SRE/플랫폼 담당
+}
+
 # boundary dev 가 자동 생성하는 'Authenticated User Grants' 역할은
 # 인증된 모든 사용자에게 target authorize-session 을 준다(데모 무력화).
 # authorize-session 만 회수(list,read 유지)하는 한 줄 보정 — dev 모드 한정 escape hatch.

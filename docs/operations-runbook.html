@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Boundary 운영 가이드 (Runbook)</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a23;--line:#2c3142;--txt:#e6e9f0;--dim:#9aa3b2;
+--accent:#7c5cff;--green:#34d399;--red:#f87171;--blue:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);line-height:1.7;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:40px 24px 90px}
+h1{font-size:30px;margin:8px 0 18px;line-height:1.25}
+h1+blockquote{margin-top:-6px}
+h2{font-size:22px;margin:42px 0 14px;padding:10px 0 6px;border-bottom:2px solid var(--accent)}
+h3{font-size:17px;margin:24px 0 8px;color:var(--blue)}
+p,li{margin:7px 0}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+code{background:#0b0d13;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+font-size:13px;font-family:"SF Mono",Menlo,monospace}
+pre{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto}
+pre code{background:none;border:none;padding:0;font-size:13px;line-height:1.55}
+blockquote{margin:12px 0;padding:10px 16px;border-left:3px solid var(--accent);
+background:rgba(124,92,255,.07);border-radius:0 8px 8px 0;color:var(--dim)}
+blockquote p{margin:4px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;
+background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.4px;background:#12141c}
+tr:last-child td{border-bottom:none}
+a{color:var(--blue)}
+ul,ol{padding-left:22px}
+strong{color:#fff}
+</style></head>
+<body><div class="wrap">
+<h1 id="boundary-runbook">Boundary 운영 가이드 (Runbook)</h1>
+<blockquote>
+<p>대상: 플랫폼/보안 운영자(관리자) + 접근이 필요한 모든 구성원(사용자)
+전제: Boundary 가 구축되어 있고, 접근제어는 <strong>GitOps(Terraform)</strong> 로 관리한다.</p>
+</blockquote>
+<p>이 문서는 "누가 어떻게 권한을 신청하고, 관리자가 어떻게 부여하고, 사용자가 어떻게 접속하는가"의 표준 절차다.</p>
+<hr />
+<h2 id="0-rr">0. 역할(R&amp;R)</h2>
+<table>
+<thead>
+<tr>
+<th>역할</th>
+<th>책임</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>사용자(Requester)</strong></td>
+<td>접근 권한 신청, 승인 후 접속</td>
+</tr>
+<tr>
+<td><strong>승인자(Approver)</strong></td>
+<td>팀 리드/리소스 오너 — 권한 신청 승인/반려</td>
+</tr>
+<tr>
+<td><strong>운영자(Admin)</strong></td>
+<td>Terraform 으로 권한 반영(apply), 리소스/사용자 관리</td>
+</tr>
+<tr>
+<td><strong>보안(Security)</strong></td>
+<td>정책 수립, 정기 권한 검토(access review), 감사</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1">1. 권한 신청 절차 (사용자)</h2>
+<blockquote>
+<p>원칙: <strong>모든 접근 권한은 신청 → 승인 → 코드 반영(PR)</strong> 을 거친다. 구두/임시 부여 금지.</p>
+</blockquote>
+<h3 id="1-1">1-1. 신청서에 담을 내용</h3>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>신청자</td>
+<td>alice (사번/계정)</td>
+</tr>
+<tr>
+<td>대상 리소스</td>
+<td><code>prod-postgres</code> (pg-target)</td>
+</tr>
+<tr>
+<td>접근 사유</td>
+<td>"결제 버그 조사 — 읽기 필요"</td>
+</tr>
+<tr>
+<td>필요 기간</td>
+<td>2026-06-10 ~ 06-17 (영구/한시)</td>
+</tr>
+<tr>
+<td>권한 수준</td>
+<td>접속(authorize-session) / 자격증명 방식(정적·동적)</td>
+</tr>
+<tr>
+<td>승인자</td>
+<td>데이터팀 리드</td>
+</tr>
+</tbody>
+</table>
+<h3 id="1-2-1">1-2. 신청 채널 (택1, 회사 표준에 맞춤)</h3>
+<ul>
+<li><strong>권장: GitHub PR</strong> — <code>terraform/roles.tf</code> 에 본인 추가하는 PR 생성 → 승인자가 리뷰 승인</li>
+<li>또는 Jira/Slack 워크플로 티켓 → 운영자가 PR 대행</li>
+</ul>
+<blockquote>
+<p>PR 방식이 GitOps 와 자연스럽게 맞물려 <strong>신청=변경이력=승인근거</strong> 가 한 번에 남는다.</p>
+</blockquote>
+<hr />
+<h2 id="2">2. 권한 부여 절차 (운영자)</h2>
+<h3 id="2-1">2-1. 승인 확인</h3>
+<ul>
+<li>신청 PR 에 <strong>승인자(리소스 오너) Approve</strong> 가 있는지 확인.</li>
+<li>최소권한 원칙 점검: 사유에 비해 과한 권한 아닌지(예: 읽기면 되는데 전체 권한?).</li>
+</ul>
+<h3 id="2-2-terraform">2-2. 코드 반영 (Terraform)</h3>
+<p>권한 = <code>role</code> 의 <code>principal_ids</code> 에 사용자 추가. 예) alice 를 <code>pg-connect</code> 에 추가:</p>
+<pre><code class="language-hcl"># terraform/roles.tf
+resource &quot;boundary_role&quot; &quot;pg_connect&quot; {
+  name            = &quot;pg-connect&quot;
+  scope_id        = var.project_scope_id
+  grant_scope_ids = [&quot;this&quot;]
+  grant_strings   = [&quot;ids=${boundary_target.pg.id};actions=authorize-session,read&quot;]
+  principal_ids   = [
+    boundary_user.this[&quot;carol&quot;].id,
+    boundary_user.this[&quot;alice&quot;].id,   # ← 신청 반영
+  ]
+}
+</code></pre>
+<pre><code class="language-bash">./scripts/apply.sh        # terraform apply (변경분만 적용)
+</code></pre>
+<h3 id="2-3">2-3. 신규 사용자라면 먼저 계정 생성</h3>
+<pre><code class="language-hcl"># terraform/accounts.tf 의 demo_users 목록에 추가 (또는 OIDC 라면 그룹 매핑)
+locals { demo_users = [&quot;alice&quot;, &quot;carol&quot;, &quot;bob&quot;, &quot;dave&quot;] }   # dave 추가
+</code></pre>
+<blockquote>
+<p>운영 환경에서는 보통 로컬 계정 대신 <strong>OIDC(SSO) 그룹</strong>을 principal 로 매핑한다.
+이 경우 "그룹 가입"이 곧 권한 부여이며, 입·퇴사가 SSO 와 자동 연동된다.</p>
+</blockquote>
+<h3 id="2-4">2-4. 한시 권한(임시 접근)</h3>
+<ul>
+<li>종료일이 있으면 캘린더/이슈에 회수 일정 등록 → 만료일에 <code>principal_ids</code> 에서 제거 PR.</li>
+<li>(Enterprise) 시간제한 정책으로 자동 만료 가능.</li>
+</ul>
+<hr />
+<h2 id="3">3. 접속 방법 안내 (사용자)</h2>
+<h3 id="3-0-1">3-0. 최초 1회 설정</h3>
+<pre><code class="language-bash">export BOUNDARY_ADDR=https://boundary.회사도메인   # 셸 프로파일에 추가 권장
+</code></pre>
+<h3 id="3-1">3-1. 로그인 (토큰 만료 시 가끔)</h3>
+<pre><code class="language-bash">boundary authenticate            # OIDC면 브라우저로 SSO 로그인
+# (로컬계정 PoC면)
+boundary authenticate password -auth-method-id=&lt;id&gt; -login-name=&lt;나&gt;
+</code></pre>
+<p>→ 토큰은 OS 키링에 저장되어 재사용. 매번 로그인 불필요.</p>
+<h3 id="3-2">3-2. 내가 접근 가능한 리소스 확인</h3>
+<pre><code class="language-bash">boundary targets list -recursive
+# Authorized Actions 에 authorize-session 있으면 접속 가능
+</code></pre>
+<h3 id="3-3">3-3. 접속</h3>
+<table>
+<thead>
+<tr>
+<th>리소스</th>
+<th>명령</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH</td>
+<td><code>boundary connect ssh -target-id=&lt;id&gt;</code></td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td><code>boundary connect postgres -target-id=&lt;id&gt;</code></td>
+</tr>
+<tr>
+<td>기타(Redis/웹/k8s 등)</td>
+<td><code>boundary connect -target-id=&lt;id&gt; -listen-port=&lt;로컬포트&gt;</code> 후 기존 클라이언트로 <code>127.0.0.1:&lt;로컬포트&gt;</code> 접속</td>
+</tr>
+</tbody>
+</table>
+<p>예시:</p>
+<pre><code class="language-bash"># DB
+boundary connect postgres -target-id=$T -- -d appdb
+# Redis
+boundary connect -target-id=$T -listen-port=16379 &amp;   ;   redis-cli -p 16379
+# k8s
+boundary connect -target-id=$T -listen-port=36443 &amp;   ;   kubectl --server https://127.0.0.1:36443 get pods
+# 웹
+boundary connect -target-id=$T -listen-port=18080 &amp;   ;   open http://127.0.0.1:18080
+</code></pre>
+<blockquote>
+<p>자격증명(서버/DB 비번)은 <strong>Boundary 가 brokering/Vault 동적발급</strong> 하므로 사용자가 따로 몰라도 된다.</p>
+</blockquote>
+<h3 id="3-4">3-4. 접속 종료</h3>
+<ul>
+<li>대화형(<code>connect ssh</code>)은 <code>exit</code>.</li>
+<li>백그라운드 프록시는 해당 프로세스 종료(Ctrl-C 또는 <code>kill</code>).</li>
+</ul>
+<hr />
+<h2 id="4">4. 권한 회수 절차</h2>
+<table>
+<thead>
+<tr>
+<th>상황</th>
+<th>조치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>업무 종료/한시 만료</td>
+<td><code>roles.tf</code> 의 <code>principal_ids</code> 에서 제거 → <code>apply</code> (PR)</td>
+</tr>
+<tr>
+<td>퇴사</td>
+<td>사용자(account/user) 삭제 또는 SSO 그룹 탈퇴 → 모든 권한 자동 소멸</td>
+</tr>
+<tr>
+<td>사고/긴급</td>
+<td>즉시 차단: 세션 취소 + 권한 제거</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-bash"># 긴급 세션 차단 (특정 사용자의 활성 세션 종료)
+boundary sessions list -recursive
+boundary sessions cancel -id=&lt;session-id&gt;
+</code></pre>
+<hr />
+<h2 id="5">5. 정기 운영 업무</h2>
+<table>
+<thead>
+<tr>
+<th>주기</th>
+<th>업무</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>상시</td>
+<td>권한 신청 PR 리뷰/승인/apply</td>
+</tr>
+<tr>
+<td>주간</td>
+<td>활성 세션·이상 접근 점검 (<code>boundary sessions list</code>)</td>
+</tr>
+<tr>
+<td>분기</td>
+<td><strong>접근 권한 검토(Access Review)</strong> — <code>roles.tf</code> 전수 점검, 미사용 권한 회수</td>
+</tr>
+<tr>
+<td>분기</td>
+<td>한시 권한 만료 정리</td>
+</tr>
+<tr>
+<td>수시</td>
+<td>신규 리소스 온보딩(target+role 선언), Vault 동적자격증명 확대</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_1">신규 리소스 온보딩 (운영자)</h3>
+<pre><code class="language-hcl"># 1) terraform/targets.tf — 리소스 등록
+resource &quot;boundary_target&quot; &quot;new_svc&quot; {
+  name = &quot;new-svc-target&quot;; type = &quot;tcp&quot;
+  scope_id = var.project_scope_id
+  default_port = 1234; address = &quot;10.0.0.5&quot;
+}
+# 2) terraform/roles.tf — 누구에게 줄지
+resource &quot;boundary_role&quot; &quot;new_svc_connect&quot; {
+  name = &quot;new-svc-connect&quot;; scope_id = var.project_scope_id
+  grant_scope_ids = [&quot;this&quot;]
+  grant_strings = [&quot;ids=${boundary_target.new_svc.id};actions=authorize-session,read&quot;]
+  principal_ids = [boundary_user.this[&quot;alice&quot;].id]
+}
+</code></pre>
+<pre><code class="language-bash">./scripts/apply.sh
+</code></pre>
+<hr />
+<h2 id="6">6. 감사 / 컴플라이언스</h2>
+<ul>
+<li><strong>접근 이력</strong>: <code>boundary sessions list -recursive</code> (누가/언제/무엇).</li>
+<li><strong>변경 이력</strong>: 모든 권한 변경이 Git PR 로 남음 (누가 승인했는지 포함).</li>
+<li><strong>세션 녹화(명령/화면)</strong>: Enterprise/HCP 전용. 요건 있으면 전환 검토.</li>
+<li><strong>정기 리포트</strong>: 분기 Access Review 결과를 보안팀에 제출.</li>
+</ul>
+<hr />
+<h2 id="7-faq">7. 문제 해결 (FAQ)</h2>
+<table>
+<thead>
+<tr>
+<th>증상</th>
+<th>원인 / 조치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>connect</code> 시 "Target ID was not passed in"</td>
+<td><code>-target-id</code> 값이 비었음. 실제 ID 확인</td>
+</tr>
+<tr>
+<td>프록시 포트가 안 열림 / <code>authorize-session ... Forbidden</code></td>
+<td>권한 없음 → 권한 신청 필요</td>
+</tr>
+<tr>
+<td><code>targets list</code> 에 리소스가 안 보임</td>
+<td>해당 리소스 read 권한도 없음 → 신청</td>
+</tr>
+<tr>
+<td>토큰 만료</td>
+<td><code>boundary authenticate</code> 재로그인</td>
+</tr>
+<tr>
+<td>TLS 인증서 오류(k8s/HTTPS)</td>
+<td>대상 인증서 SAN 확인, 필요 시 CA 지정</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_2">부록. 표준 신청 템플릿 (복사용)</h2>
+<pre><code>[Boundary 접근 권한 신청]
+- 신청자:
+- 대상 리소스(target):
+- 권한 수준: authorize-session (읽기/쓰기 구분 필요 시 명시)
+- 사유:
+- 필요 기간: (영구 / YYYY-MM-DD ~ YYYY-MM-DD)
+- 승인자:
+</code></pre>
+</div></body></html>

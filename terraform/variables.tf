@@ -106,6 +106,16 @@ variable "web_port" {
   default = 8089
 }
 
+# Kubernetes API 타겟 (kind 클러스터)
+variable "k8s_address" {
+  type    = string
+  default = "127.0.0.1"
+}
+variable "k8s_port" {
+  type    = number
+  default = 26443
+}
+
 # Vault
 variable "vault_addr" {
   type    = string
