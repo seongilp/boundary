@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ko"><head><meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Boundary 접근제어 — 최종 아키텍처</title>
+<style>
+:root{--bg:#0f1117;--panel:#171a23;--line:#2c3142;--txt:#e6e9f0;--dim:#9aa3b2;
+--accent:#7c5cff;--green:#34d399;--red:#f87171;--blue:#60a5fa}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);line-height:1.7;
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Apple SD Gothic Neo",sans-serif}
+.wrap{max-width:900px;margin:0 auto;padding:40px 24px 90px}
+h1{font-size:30px;margin:8px 0 18px;line-height:1.25}
+h1+blockquote{margin-top:-6px}
+h2{font-size:22px;margin:42px 0 14px;padding:10px 0 6px;border-bottom:2px solid var(--accent)}
+h3{font-size:17px;margin:24px 0 8px;color:var(--blue)}
+p,li{margin:7px 0}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+code{background:#0b0d13;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+font-size:13px;font-family:"SF Mono",Menlo,monospace}
+pre{background:#0b0d13;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow:auto}
+pre code{background:none;border:none;padding:0;font-size:13px;line-height:1.55}
+blockquote{margin:12px 0;padding:10px 16px;border-left:3px solid var(--accent);
+background:rgba(124,92,255,.07);border-radius:0 8px 8px 0;color:var(--dim)}
+blockquote p{margin:4px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:14px 0;
+background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.4px;background:#12141c}
+tr:last-child td{border-bottom:none}
+a{color:var(--blue)}
+ul,ol{padding-left:22px}
+strong{color:#fff}
+</style></head>
+<body><div class="wrap">
+<h1 id="boundary">Boundary 접근제어 — 최종 아키텍처</h1>
+<p>회사 신원(LDAP) → SSO(Keycloak) → 접근제어(Boundary) → 리소스 까지,
+<strong>인증·권한·자격증명·신청</strong>을 모두 갖춘 zero-trust 원격접속 아키텍처. 전부 로컬 PoC로 검증됨.</p>
+<hr />
+<h2 id="1">1. 전체 그림</h2>
+<pre><code>┌──────────────┐   사람·그룹 관리 (인사)
+│   lldap      │   dave→sre, erin→dba, frank→none
+│  (LDAP)      │   * 실무에선 AD / 회사 디렉터리
+└──────┬───────┘
+       │ ① User Federation (동기화 + 그룹 매퍼)
+       ▼
+┌──────────────┐   인증 + MFA + 로그인 테마
+│  Keycloak    │   LDAP 사용자 import, groups claim 발급
+│  (OIDC IdP)  │
+└──────┬───────┘
+       │ ② OIDC (auth-code)
+       ▼
+┌──────────────┐   &quot;누가 무엇에 접근?&quot; 통제
+│  Boundary    │   managed group(sre/dba) + role/grant
+│ (controller  │   세션 프록시 / 자격증명 brokering
+│  + worker)   │
+└──────┬───────┘
+       │ ③ 세션 중개 (직접 접속 X)
+       ▼
+┌─────────────────────────────────────────────┐
+│ SSH · PostgreSQL · Redis · 웹 · k8s API ...   │  ← 타겟
+└─────────────────────────────────────────────┘
+       ▲
+       │ ④ 동적 자격증명 (접속마다 임시계정)
+┌──────────────┐
+│   Vault      │
+└──────────────┘
+
+[ GitOps ]  Terraform 이 Boundary/Vault 리소스를 선언 (access.json / targets.json)
+[ 신청   ]  웹 포털 → PR → 승인 → apply   (미니 IGA)
+</code></pre>
+<h2 id="2">2. 계층별 역할 (관심사 분리)</h2>
+<table>
+<thead>
+<tr>
+<th>계층</th>
+<th>컴포넌트</th>
+<th>책임</th>
+<th>관리 위치</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>신원</strong></td>
+<td>lldap / AD</td>
+<td>누가 존재하나 + 그룹 멤버십</td>
+<td>LDAP 웹UI (인사)</td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>Keycloak</td>
+<td>로그인·MFA·SSO, 그룹 claim</td>
+<td>IdP 설정 (1회)</td>
+</tr>
+<tr>
+<td><strong>권한</strong></td>
+<td>Boundary</td>
+<td>그룹→리소스 정책, 세션 통제</td>
+<td>Terraform (GitOps)</td>
+</tr>
+<tr>
+<td><strong>자격증명</strong></td>
+<td>Vault / Cred Store</td>
+<td>서버·DB 비번 brokering·동적발급</td>
+<td>Terraform</td>
+</tr>
+<tr>
+<td><strong>신청</strong></td>
+<td>웹 포털</td>
+<td>셀프서비스 요청·승인</td>
+<td>git PR</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>핵심 원칙: <strong>신원(누구)·권한(무엇)·자격증명(비번)을 분리.</strong> 각 계층이 독립적으로 교체 가능.</p>
+</blockquote>
+<h2 id="3-alice-ssh">3. 데이터 흐름 (alice 가 SSH 접속)</h2>
+<pre><code>1. alice → Boundary 에 &quot;OIDC 로그인&quot; 요청
+2. Boundary → Keycloak 로 리다이렉트 → alice 로그인 (MFA)
+   (Keycloak 은 alice 를 lldap 에서 federation)
+3. Keycloak → 토큰 발급 (groups: [&quot;sre&quot;])
+4. Boundary → managed group &quot;sre&quot; 에 편입 → ssh-target authorize 권한 확인
+5. alice → boundary connect ssh → 워커가 SSH 서버로 프록시
+   (자격증명은 Vault/brokering 으로 자동 주입, alice 는 비번 모름)
+</code></pre>
+<h2 id="4">4. 권한 모델 (그룹 기반)</h2>
+<pre><code>LDAP 그룹     Keycloak       Boundary managed group     Role (Terraform)
+  sre     →   groups:sre  →       sre              →    ssh/web/k8s
+  dba     →   groups:dba  →       dba              →    pg/pg-dyn/redis
+</code></pre>
+<ul>
+<li><strong>개인을 매핑하지 않음.</strong> "어느 그룹이냐"로 권한 결정.</li>
+<li>신규 입사자 = LDAP 그룹에 추가하면 끝 (Boundary 무수정).</li>
+<li>검증: lldap 에서 dave 를 dba 에 넣자 → groups <code>[sre]</code>→<code>[dba,sre]</code> → Boundary 권한 자동 확장.</li>
+</ul>
+<h2 id="5">5. 검증된 접근 매트릭스</h2>
+<table>
+<thead>
+<tr>
+<th>사용자(그룹)</th>
+<th>SSH</th>
+<th>PG정적</th>
+<th>PG동적</th>
+<th>Redis</th>
+<th>웹</th>
+<th>k8s</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>alice (sre)</td>
+<td>✅</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>carol (dba)</td>
+<td>⛔</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>⛔</td>
+<td>⛔</td>
+</tr>
+<tr>
+<td>bob (none)</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>⛔</td>
+<td>⛔</td>
+</tr>
+</tbody>
+</table>
+<h2 id="6-gitops">6. GitOps &amp; 신청 흐름</h2>
+<pre><code>[사용자] 웹폼 신청 → access.json 수정 PR
+[승인자] PR 머지
+[CI/운영자] terraform apply → Boundary 권한 반영
+[운영자] 리소스 추가/삭제는 운영자 페이지에서 즉시 apply
+</code></pre>
+<p>단일 소스: <code>terraform/access.json</code>(권한) · <code>terraform/targets.json</code>(리소스)</p>
+<h2 id="7-poc">7. 컴포넌트 / 포트 (로컬 PoC)</h2>
+<table>
+<thead>
+<tr>
+<th>컴포넌트</th>
+<th>주소</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Boundary</td>
+<td>http://127.0.0.1:9200</td>
+<td>admin / password</td>
+</tr>
+<tr>
+<td>Keycloak</td>
+<td>http://127.0.0.1:8081</td>
+<td>admin / admin</td>
+</tr>
+<tr>
+<td>lldap</td>
+<td>http://127.0.0.1:17170</td>
+<td>admin / adminpassword</td>
+</tr>
+<tr>
+<td>Vault</td>
+<td>http://127.0.0.1:8200</td>
+<td>token: root</td>
+</tr>
+<tr>
+<td>신청 포털</td>
+<td>http://127.0.0.1:8090</td>
+<td>/ 신청, /admin 운영자</td>
+</tr>
+<tr>
+<td>타겟</td>
+<td>ssh:2222 · pg:5432 · redis:6379 · web:8089 · k8s:26443</td>
+<td>Docker</td>
+</tr>
+</tbody>
+</table>
+<h2 id="8">8. 실무 전환 체크리스트</h2>
+<ul>
+<li>[ ] <code>boundary dev</code> → 프로덕션(PostgreSQL 백엔드 + KMS), 워커를 각 망에 분산 배치</li>
+<li>[ ] lldap → 실제 <strong>AD/LDAP</strong>, Keycloak federation 그대로</li>
+<li>[ ] <strong>MFA</strong> 강제 (Keycloak)</li>
+<li>[ ] 리소스는 <strong>동적 호스트 카탈로그 + 태그</strong> 로 자동 발견 (수천 대 대응)</li>
+<li>[ ] 권한은 <strong>그룹 기준</strong>, 스코프를 팀/환경별 project 로 분리</li>
+<li>[ ] 신청·승인·만료·검토가 빡세지면 <strong>IGA</strong>(midPoint/상용) 도입</li>
+<li>[ ] 세션 녹화 필요 시 <strong>HCP/Enterprise</strong></li>
+<li>[ ] 타겟 <strong>직노출 포트 차단</strong> → Boundary 경유만 허용</li>
+</ul>
+<h2 id="9">9. 오픈소스 스택 요약</h2>
+<table>
+<thead>
+<tr>
+<th>역할</th>
+<th>사용(PoC)</th>
+<th>대안</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>디렉터리</td>
+<td>lldap</td>
+<td>OpenLDAP, 389DS, FreeIPA, AD</td>
+</tr>
+<tr>
+<td>IdP/SSO</td>
+<td>Keycloak</td>
+<td>Authentik, Zitadel</td>
+</tr>
+<tr>
+<td>접근제어</td>
+<td>Boundary (OSS)</td>
+<td>(AWS SSM — AWS 한정)</td>
+</tr>
+<tr>
+<td>시크릿</td>
+<td>Vault</td>
+<td>—</td>
+</tr>
+<tr>
+<td>IaC</td>
+<td>Terraform</td>
+<td>—</td>
+</tr>
+<tr>
+<td>신청(IGA)</td>
+<td>자체 웹포털</td>
+<td>midPoint, Opal, Indent</td>
+</tr>
+</tbody>
+</table>
+</div></body></html>
