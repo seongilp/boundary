@@ -1,5 +1,15 @@
 {
-  "alice": ["ssh-target", "web-target", "k8s-target"],
-  "carol": ["pg-target", "pg-dyn-target", "redis-target"],
-  "bob": []
+  "alice": [
+    "ssh-target",
+    "web-target",
+    "k8s-target"
+  ],
+  "carol": [
+    "pg-target",
+    "pg-dyn-target",
+    "redis-target"
+  ],
+  "bob": [
+    "redis-target"
+  ]
 }
