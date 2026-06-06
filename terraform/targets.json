@@ -1,0 +1,17 @@
+[
+  {
+    "name": "redis-target",
+    "address": "127.0.0.1",
+    "port": 6379
+  },
+  {
+    "name": "web-target",
+    "address": "127.0.0.1",
+    "port": 8089
+  },
+  {
+    "name": "k8s-target",
+    "address": "127.0.0.1",
+    "port": 26443
+  }
+]

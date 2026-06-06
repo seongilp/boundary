@@ -8,15 +8,15 @@ locals {
   # 단일 소스: 누가 어떤 target 에 접근 가능한가
   access = jsondecode(file("${path.module}/access.json"))
 
-  # target 이름 → target id 매핑
-  target_ids = {
-    "ssh-target"    = boundary_target.ssh.id
-    "pg-target"     = boundary_target.pg.id
-    "pg-dyn-target" = boundary_target.pg_dynamic.id
-    "redis-target"  = boundary_target.redis.id
-    "web-target"    = boundary_target.web.id
-    "k8s-target"    = boundary_target.k8s.id
-  }
+  # target 이름 → target id 매핑 (자격증명 타겟 + targets.json 동적 타겟)
+  target_ids = merge(
+    {
+      "ssh-target"    = boundary_target.ssh.id
+      "pg-target"     = boundary_target.pg.id
+      "pg-dyn-target" = boundary_target.pg_dynamic.id
+    },
+    { for name, t in boundary_target.extra : name => t.id }
+  )
 
   # (사용자,target) 쌍으로 평탄화
   grants = flatten([

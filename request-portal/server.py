@@ -13,12 +13,38 @@ from urllib.parse import parse_qs
 
 REPO = "seongilp/boundary"
 USERS = ["alice", "carol", "bob"]
-TARGETS = ["ssh-target", "pg-target", "pg-dyn-target", "redis-target", "web-target", "k8s-target"]
+# 자격증명이 붙은 고정 타겟(HCL 관리) + targets.json 동적 타겟(운영자 관리)
+FIXED_TARGETS = ["ssh-target", "pg-target", "pg-dyn-target"]
 PORT = 8090
+
+
+REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TF_DIR = os.path.join(REPO_DIR, "terraform")
+ACCESS_JSON = os.path.join(TF_DIR, "access.json")
+TARGETS_JSON = os.path.join(TF_DIR, "targets.json")
 
 
 def run(args, cwd=None):
     return subprocess.run(args, cwd=cwd, capture_output=True, text=True, check=True)
+
+
+def load_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+def get_targets():
+    """선택 가능한 전체 target 이름 = 고정(자격증명) + targets.json 동적."""
+    extra = [t["name"] for t in load_json(TARGETS_JSON, [])]
+    return FIXED_TARGETS + extra
+
+
+def tf_apply_local():
+    """로컬 terraform apply (운영자 액션은 즉시 적용)."""
+    return run(["terraform", "apply", "-auto-approve"], cwd=TF_DIR)
 
 
 def create_pr(requester, target, reason, duration):
@@ -165,6 +191,22 @@ ADMIN = """<!DOCTYPE html><html lang="ko" class="dark"><head><meta charset="utf-
       <i data-lucide="inbox" class="w-4 h-4 text-violet-300"></i>대기 중인 신청</div>
     __PRS__
   </div>
+  <div class="rounded-2xl border border-slate-700/60 p-5 mb-4 bg-gradient-to-b from-slate-900/90 to-slate-950/90 backdrop-blur">
+    <div class="flex items-center gap-2 mb-3 text-slate-300 font-semibold text-sm">
+      <i data-lucide="boxes" class="w-4 h-4 text-violet-300"></i>리소스 관리
+      <span class="text-[11px] text-slate-500 font-normal">(추가/삭제는 즉시 적용)</span></div>
+    __RESOURCES__
+    <form method="POST" action="/admin/target/add" class="flex gap-2 mt-3">
+      <input name="name" required placeholder="이름 (예: mysql)"
+        class="flex-1 bg-slate-950/70 border border-slate-700/70 rounded-lg text-sm text-slate-100 px-3 py-2 outline-none focus:border-violet-500">
+      <input name="address" required placeholder="주소 (예: 127.0.0.1)"
+        class="flex-1 bg-slate-950/70 border border-slate-700/70 rounded-lg text-sm text-slate-100 px-3 py-2 outline-none focus:border-violet-500">
+      <input name="port" required placeholder="포트" type="number"
+        class="w-24 bg-slate-950/70 border border-slate-700/70 rounded-lg text-sm text-slate-100 px-3 py-2 outline-none focus:border-violet-500">
+      <button class="flex items-center gap-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-3 py-2 whitespace-nowrap transition">
+        <i data-lucide="plus" class="w-4 h-4"></i>추가</button>
+    </form>
+  </div>
   <div class="rounded-2xl border border-slate-700/60 p-5 bg-gradient-to-b from-slate-900/90 to-slate-950/90 backdrop-blur">
     <div class="flex items-center gap-2 mb-3 text-slate-300 font-semibold text-sm">
       <i data-lucide="grid-3x3" class="w-4 h-4 text-violet-300"></i>현재 권한 매트릭스
@@ -181,7 +223,7 @@ ADMIN = """<!DOCTYPE html><html lang="ko" class="dark"><head><meta charset="utf-
 
 def render(msg=""):
     users = "".join(f"<option>{u}</option>" for u in USERS)
-    targets = "".join(f"<option>{t}</option>" for t in TARGETS)
+    targets = "".join(f"<option>{t}</option>" for t in get_targets())
     return (PAGE.replace("__USERS__", users)
                 .replace("__TARGETS__", targets)
                 .replace("__MSG__", msg))
@@ -199,11 +241,48 @@ def msg_err(err):
 
 
 # ──────────────────────────────────────────────
-# 운영자(Admin) 페이지 — 신청 PR 승인 + 권한 매트릭스
+# 운영자(Admin) 페이지 — 신청 PR 승인 + 리소스 관리 + 권한 매트릭스
 # (PoC: 신청 포털과 한 서버에 둠. 나중엔 별도 서비스/인증으로 분리)
 # ──────────────────────────────────────────────
-REPO_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-ACCESS_JSON = os.path.join(REPO_DIR, "terraform", "access.json")
+def add_target(name, address, port):
+    """targets.json 에 새 리소스 추가 → 즉시 apply."""
+    name = name.strip()
+    if not name.endswith("-target"):
+        name = name + "-target"
+    targets = load_json(TARGETS_JSON, [])
+    if any(t["name"] == name for t in targets) or name in FIXED_TARGETS:
+        return f"이미 존재하는 리소스: {name}"
+    try:
+        targets.append({"name": name, "address": address.strip(), "port": int(port)})
+    except ValueError:
+        return "포트는 숫자여야 합니다."
+    with open(TARGETS_JSON, "w") as f:
+        json.dump(targets, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    try:
+        tf_apply_local()
+        return None
+    except subprocess.CalledProcessError as e:
+        return (e.stderr or e.stdout or str(e))
+
+
+def remove_target(name):
+    """targets.json 에서 리소스 제거 + access.json 에서 해당 권한도 정리 → 즉시 apply."""
+    targets = [t for t in load_json(TARGETS_JSON, []) if t["name"] != name]
+    with open(TARGETS_JSON, "w") as f:
+        json.dump(targets, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    acc = load_json(ACCESS_JSON, {})
+    for u in acc:
+        acc[u] = [t for t in acc[u] if t != name]
+    with open(ACCESS_JSON, "w") as f:
+        json.dump(acc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    try:
+        tf_apply_local()
+        return None
+    except subprocess.CalledProcessError as e:
+        return (e.stderr or e.stdout or str(e))
 
 
 def pending_prs():
@@ -239,17 +318,34 @@ def merge_and_apply(num):
 def render_admin(msg=""):
     m = access_matrix()
     prs = pending_prs()
+    targets = get_targets()
     # 권한 매트릭스
     rows = ""
     for u in USERS:
         cells = ""
-        for t in TARGETS:
+        for t in targets:
             ok = t in m.get(u, [])
             dot = ('<span class="text-emerald-400">●</span>' if ok
                    else '<span class="text-slate-600">○</span>')
             cells += f'<td class="text-center py-2">{dot}</td>'
         rows += f'<tr class="border-t border-slate-800"><td class="py-2 pr-3 font-medium">{u}</td>{cells}</tr>'
-    heads = "".join(f'<th class="px-2 py-2 font-medium text-slate-400 text-[11px]">{t.replace("-target","")}</th>' for t in TARGETS)
+    heads = "".join(f'<th class="px-2 py-2 font-medium text-slate-400 text-[11px]">{t.replace("-target","")}</th>' for t in targets)
+    # 리소스 관리: 고정(자격증명) 읽기전용 + 동적(삭제 가능)
+    extra = load_json(TARGETS_JSON, [])
+    res = ""
+    for t in FIXED_TARGETS:
+        res += (f'<div class="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-sm">'
+                f'<i data-lucide="lock" class="w-3.5 h-3.5 text-slate-500"></i><span class="font-medium">{t}</span>'
+                f'<span class="text-[11px] text-slate-500 ml-auto">자격증명 연동 · 고정</span></div>')
+    for t in extra:
+        res += (f'<div class="flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900/60 px-3 py-2 text-sm">'
+                f'<i data-lucide="server" class="w-3.5 h-3.5 text-violet-300"></i><span class="font-medium">{html.escape(t["name"])}</span>'
+                f'<span class="text-[12px] text-slate-500">{html.escape(t["address"])}:{t["port"]}</span>'
+                f'<form method="POST" action="/admin/target/remove" class="ml-auto">'
+                f'<input type="hidden" name="name" value="{html.escape(t["name"])}">'
+                f'<button class="text-rose-400 hover:text-rose-300 flex items-center gap-1 text-[12px]">'
+                f'<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>삭제</button></form></div>')
+    resources_html = f'<div class="space-y-2">{res}</div>'
     # 신청 PR 목록
     if prs:
         items = ""
@@ -268,6 +364,7 @@ def render_admin(msg=""):
 
     return (ADMIN.replace("__MSG__", msg)
                  .replace("__PRS__", prs_html)
+                 .replace("__RESOURCES__", resources_html)
                  .replace("__HEADS__", heads)
                  .replace("__ROWS__", rows))
 
@@ -294,11 +391,17 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length", 0))
         form = parse_qs(self.rfile.read(n).decode("utf-8"))
         g = lambda k: form.get(k, [""])[0]
+        def ok(t):
+            return f'<div class="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 text-[13px] text-emerald-200">✅ {t}</div>'
         if self.path == "/admin/merge":
             err = merge_and_apply(g("num"))
-            msg = (msg_err(err) if err else
-                   '<div class="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3.5 text-[13px] text-emerald-200">✅ 승인 &amp; 적용 완료 — 권한이 부여되었습니다.</div>')
-            self._send(render_admin(msg))
+            self._send(render_admin(msg_err(err) if err else ok("승인 &amp; 적용 완료 — 권한이 부여되었습니다.")))
+        elif self.path == "/admin/target/add":
+            err = add_target(g("name"), g("address"), g("port"))
+            self._send(render_admin(msg_err(err) if err else ok("리소스 추가 &amp; 적용 완료.")))
+        elif self.path == "/admin/target/remove":
+            err = remove_target(g("name"))
+            self._send(render_admin(msg_err(err) if err else ok("리소스 삭제 &amp; 적용 완료.")))
         else:
             url, err = create_pr(g("requester"), g("target"), g("reason"), g("duration"))
             self._send(render(msg_err(err) if err else msg_ok(url)))

@@ -13,19 +13,9 @@ output "pg_dyn_target_id" {
   value       = boundary_target.pg_dynamic.id
 }
 
-output "redis_target_id" {
-  description = "Redis target ID"
-  value       = boundary_target.redis.id
-}
-
-output "web_target_id" {
-  description = "웹앱(HTTP) target ID"
-  value       = boundary_target.web.id
-}
-
-output "k8s_target_id" {
-  description = "Kubernetes API target ID"
-  value       = boundary_target.k8s.id
+output "extra_target_ids" {
+  description = "targets.json 기반 동적 target ID 들"
+  value       = { for name, t in boundary_target.extra : name => t.id }
 }
 
 output "users" {

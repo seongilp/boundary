@@ -9,8 +9,5 @@
     "pg-dyn-target",
     "redis-target"
   ],
-  "bob": [
-    "redis-target",
-    "k8s-target"
-  ]
+  "bob": []
 }

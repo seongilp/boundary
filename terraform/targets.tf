@@ -35,28 +35,19 @@ resource "boundary_target" "pg_dynamic" {
   brokered_credential_source_ids = [boundary_credential_library_vault.pg_dynamic.id]
 }
 
-# SSH/DB 가 아닌 TCP 리소스도 동일하게 통제된다.
-resource "boundary_target" "redis" {
-  name         = "redis-target"
-  type         = "tcp"
-  scope_id     = var.project_scope_id
-  default_port = var.redis_port
-  address      = var.redis_address
+# ── 운영자가 자유롭게 관리하는 일반 TCP 리소스 ──
+# targets.json (단일 소스) 에서 읽어 자동 생성. 운영자 페이지가 이 파일을 편집한다.
+# (자격증명이 붙는 ssh/pg/pg-dyn 은 위에 명시적으로 둠)
+locals {
+  extra_targets = jsondecode(file("${path.module}/targets.json"))
 }
 
-resource "boundary_target" "web" {
-  name         = "web-target"
-  type         = "tcp"
-  scope_id     = var.project_scope_id
-  default_port = var.web_port
-  address      = var.web_address
-}
+resource "boundary_target" "extra" {
+  for_each = { for t in local.extra_targets : t.name => t }
 
-# Kubernetes API 서버 — 클러스터 전체의 제어판. 가장 통제가치 높은 타겟 중 하나.
-resource "boundary_target" "k8s" {
-  name         = "k8s-target"
+  name         = each.value.name
   type         = "tcp"
   scope_id     = var.project_scope_id
-  default_port = var.k8s_port
-  address      = var.k8s_address
+  default_port = each.value.port
+  address      = each.value.address
 }
