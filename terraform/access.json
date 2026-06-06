@@ -10,6 +10,7 @@
     "redis-target"
   ],
   "bob": [
-    "redis-target"
+    "redis-target",
+    "k8s-target"
   ]
 }
