@@ -34,3 +34,20 @@ resource "boundary_target" "pg_dynamic" {
 
   brokered_credential_source_ids = [boundary_credential_library_vault.pg_dynamic.id]
 }
+
+# SSH/DB 가 아닌 TCP 리소스도 동일하게 통제된다.
+resource "boundary_target" "redis" {
+  name         = "redis-target"
+  type         = "tcp"
+  scope_id     = var.project_scope_id
+  default_port = var.redis_port
+  address      = var.redis_address
+}
+
+resource "boundary_target" "web" {
+  name         = "web-target"
+  type         = "tcp"
+  scope_id     = var.project_scope_id
+  default_port = var.web_port
+  address      = var.web_address
+}

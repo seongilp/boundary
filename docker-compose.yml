@@ -29,6 +29,22 @@ services:
       - "5432:5432"                 # 호스트 5432 -> 컨테이너 5432
     restart: unless-stopped
 
+  # Redis (캐시/데이터스토어). SSH/DB 가 아닌 TCP 리소스 예시.
+  redis-target:
+    image: redis:7
+    container_name: boundary-redis-target
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # 웹앱 (HTTP). traefik/whoami 가 요청정보를 평문으로 돌려줌.
+  web-target:
+    image: traefik/whoami:latest
+    container_name: boundary-web-target
+    ports:
+      - "8089:80"                   # 호스트 8089 -> 컨테이너 80
+    restart: unless-stopped
+
   # HashiCorp Vault (dev 모드). 동적 DB 자격증명 발급용.
   # dev 모드라 자동 unseal, root 토큰 = "root". 학습 전용.
   vault:

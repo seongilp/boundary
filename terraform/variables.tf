@@ -86,6 +86,26 @@ variable "ssh_login_password" {
   sensitive = true
 }
 
+# Redis 타겟
+variable "redis_address" {
+  type    = string
+  default = "127.0.0.1"
+}
+variable "redis_port" {
+  type    = number
+  default = 6379
+}
+
+# 웹앱 타겟 (HTTP)
+variable "web_address" {
+  type    = string
+  default = "127.0.0.1"
+}
+variable "web_port" {
+  type    = number
+  default = 8089
+}
+
 # Vault
 variable "vault_addr" {
   type    = string

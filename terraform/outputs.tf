@@ -13,6 +13,16 @@ output "pg_dyn_target_id" {
   value       = boundary_target.pg_dynamic.id
 }
 
+output "redis_target_id" {
+  description = "Redis target ID"
+  value       = boundary_target.redis.id
+}
+
+output "web_target_id" {
+  description = "웹앱(HTTP) target ID"
+  value       = boundary_target.web.id
+}
+
 output "users" {
   description = "생성된 Boundary 사용자"
   value       = { for k, u in boundary_user.this : k => u.id }
