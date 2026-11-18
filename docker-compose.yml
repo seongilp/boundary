@@ -19,7 +19,7 @@ services:
 
   # PostgreSQL 타겟. 호스트 localhost:5432 로 노출.
   postgres-target:
-    image: postgres:16
+    image: postgres:18
     container_name: boundary-pg-target
     environment:
       POSTGRES_USER: appuser
