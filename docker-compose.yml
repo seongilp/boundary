@@ -63,7 +63,7 @@ services:
   # Keycloak — OIDC IdP (SSO). 회사 로그인 + 그룹(sre/dba) 제공.
   # realm-boundary.json 을 부팅 시 import (선언형).
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.8
     container_name: boundary-keycloak
     command: ["start-dev", "--import-realm"]
     environment:
