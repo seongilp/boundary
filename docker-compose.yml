@@ -31,7 +31,7 @@ services:
 
   # Redis (캐시/데이터스토어). SSH/DB 가 아닌 TCP 리소스 예시.
   redis-target:
-    image: redis:7
+    image: redis:8
     container_name: boundary-redis-target
     ports:
       - "6379:6379"
